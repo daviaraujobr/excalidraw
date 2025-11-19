@@ -4152,7 +4152,7 @@ class App extends React.Component<AppProps, AppState> {
           left: Math.max(propertiesPanelRect?.right ?? 0, 0) + PADDING,
         };
   };
-
+  
   // Input handling
   private onKeyDown = withBatchedUpdates(
     (event: React.KeyboardEvent | KeyboardEvent) => {
@@ -4181,7 +4181,15 @@ class App extends React.Component<AppProps, AppState> {
         });
       }
 
+
       if (!isInputLike(event.target)) {
+
+        // - IMPLEMENTAÇÃO (Ciclo 4) -
+        // refatoração pro (ciclo 5)
+  if (this.handleKeyboardRotation(event)) {
+          return;
+        }
+        
         if (
           (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) &&
           this.state.croppingElementId
@@ -8264,6 +8272,41 @@ class App extends React.Component<AppProps, AppState> {
     }
   }
 
+  // --- NOVO MÉTODO ---
+
+  private handleKeyboardRotation(event: React.KeyboardEvent | KeyboardEvent) {
+    // Verifica: Shift + Seta + (Não ser Ctrl/Cmd)
+    if (event.shiftKey && isArrowKey(event.key) && !event[KEYS.CTRL_OR_CMD]) {
+      event.preventDefault();
+
+      // Lógica do Ciclo 6 e refatoração do 5 : Prioridade (Alt > Grid > Padrão)
+      let degreeStep = 15; // Padrão
+      
+      if (event.altKey) {
+        degreeStep = 1;    // Prioridade 1: Precisão (Alt)
+      } else 
+        
+      if (this.state.gridModeEnabled) {
+
+        degreeStep = 90;   // Prioridade 2: Grid
+      }
+
+      const step = (degreeStep * Math.PI) / 180;
+
+      const selectedElements = this.scene.getSelectedElements(this.state);
+      
+      selectedElements.forEach((element) => {
+        const isRight = event.key === KEYS.ARROW_RIGHT || event.key === KEYS.ARROW_UP;
+        
+        this.scene.mutateElement(element, {
+          angle: (element.angle + (isRight ? step : -step)) as Radians,
+        });
+      });
+      return true; // Retorna true para avisar que o evento foi tratado
+    }
+    return false;
+  }
+
   private onKeyDownFromPointerDownHandler(
     pointerDownState: PointerDownState,
   ): (event: KeyboardEvent) => void {
@@ -11120,7 +11163,9 @@ class App extends React.Component<AppProps, AppState> {
         transformHandleType,
         selectedElements,
         this.scene,
-        shouldRotateWithDiscreteAngle(event),
+        // Antes era apenas: shouldRotateWithDiscreteAngle(event),
+        // Agora adicionamos a verificação do grid:
+        shouldRotateWithDiscreteAngle(event) || this.state.gridModeEnabled,
         shouldResizeFromCenter(event),
         selectedElements.some((element) => isImageElement(element))
           ? !shouldMaintainAspectRatio(event)

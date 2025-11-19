@@ -5200,4 +5200,179 @@ describe("history", () => {
       });
     });
   });
+
+describe("Rotation with Grid Mode (Issue #4057)", () => {
+    it("should snap rotation to 90 degrees with grid on (no shift) - Issue #4057", async () => {
+      await render(<Excalidraw handleKeyboardGlobally={true} gridModeEnabled={true} />);
+      
+      act(() => {
+        h.app.setAppState({ gridModeEnabled: true });
+      });
+
+      const element = API.createElement({
+        type: "rectangle",
+        x: 0,
+        y: 0,
+        width: 85, 
+        height: 85,
+        angle: 0,
+        groupIds: [],
+      });
+
+      API.setElements([element]);
+      API.setSelectedElements([element]);
+
+      // 2. Interação
+      const rotationHandleCoords = { x: 42.5, y: -20 };
+      mouse.downAt(rotationHandleCoords.x, rotationHandleCoords.y);
+
+      // 3. Mover o mouse para um ponto da grade (120, 40)
+      // Como o centro Y é 42.5 e o mouse está em Y=40, haverá um desvio de 2.5px
+      // Isso cria um ângulo "torto" naturalmente.
+      const near90DegreeCoords = { x: 120, y: 40 };
+      mouse.moveTo(near90DegreeCoords.x, near90DegreeCoords.y);
+
+      mouse.up();
+
+      // 4. Asserção
+      const rotatedElement = h.elements.find((el) => el.id === element.id);
+      if (!rotatedElement) throw new Error("Elemento sumiu!");
+
+      // Com o bug (sem código no App.tsx), isso dará erro (~1.53 rads).
+      // Com a correção, o sistema vai ignorar o desvio de 2.5px e forçar 90 graus (1.57 rads).
+      expect(rotatedElement.angle).toBeCloseTo(Math.PI / 2);
+    });
+  });
+});
+
+it("should snap rotation to 180 degrees with grid on (no shift)", async () => {
+      // 1. Setup
+      await render(<Excalidraw handleKeyboardGlobally={true} gridModeEnabled={true} />);
+      act(() => {
+        h.app.setAppState({ gridModeEnabled: true });
+      });
+
+      // 2. Criar elemento 85x85 (centro em 42.5, 42.5)
+      const element = API.createElement({
+        type: "rectangle",
+        x: 0, y: 0, width: 85, height: 85, angle: 0, groupIds: [],
+      });
+      API.setElements([element]);
+      API.setSelectedElements([element]);
+
+      // 3. Interação
+      // Clicar na alça (topo)
+      mouse.downAt(42.5, -20);
+
+      // Arrastar para baixo (aprox 180 graus)
+      // Centro X é 42.5. Movemos para X=40 (na grade). O desvio de 2.5px forçaria um erro
+      // se o snap não estivesse ativo.
+      mouse.moveTo(40, 140);
+      mouse.up();
+
+      // 4. Asserção
+      const rotatedElement = h.elements.find((el) => el.id === element.id);
+      if (!rotatedElement) throw new Error("Elemento não encontrado!");
+
+      // Esperamos 180 graus (Math.PI)
+      expect(rotatedElement.angle).toBeCloseTo(Math.PI);
+    });
+
+it("should snap rotation to -90 degrees with grid on (no shift)", async () => {
+      // 1. Setup
+      await render(<Excalidraw handleKeyboardGlobally={true} gridModeEnabled={true} />);
+      act(() => {
+        h.app.setAppState({ gridModeEnabled: true });
+      });
+
+      // 2. Criar elemento 85x85 (Centro em 42.5, 42.5)
+      const element = API.createElement({
+        type: "rectangle",
+        x: 0, y: 0, width: 85, height: 85, angle: 0, groupIds: [],
+      });
+      API.setElements([element]);
+      API.setSelectedElements([element]);
+
+      // 3. Interação
+      // Clicar na alça (topo)
+      mouse.downAt(42.5, -20);
+
+      // Arrastar para a ESQUERDA (aprox -90 graus)
+      // Centro Y é 42.5. Movemos para Y=40 (grade). O desvio de 2.5px causaria erro
+      // sem a correção.
+      mouse.moveTo(-40, 40);
+      mouse.up();
+
+      // 4. Asserção
+      const rotatedElement = h.elements.find((el) => el.id === element.id);
+      if (!rotatedElement) throw new Error("Elemento não encontrado!");
+
+      // Esperamos -90 graus (-Math.PI / 2)
+      expect(rotatedElement.angle).toBeCloseTo((3 * Math.PI) / 2);
+    });
+
+  it("should rotate element by 15 degrees (default) with Shift+ArrowRight", async () => {
+  await render(<Excalidraw handleKeyboardGlobally={true} />);
+  // Garante Grid desligado
+  act(() => { h.app.setAppState({ gridModeEnabled: false }); });
+
+  const element = API.createElement({ type: "rectangle", angle: 0 });
+  API.setElements([element]);
+  API.setSelectedElements([element]);
+
+  // Ação: Shift + Seta Direita
+  fireEvent.keyDown(document, {
+    key: "ArrowRight",
+    code: "ArrowRight",
+    shiftKey: true,
+    ctrlKey: false,
+    altKey: false
+  });
+
+  const rotatedElement = h.elements.find((el) => el.id === element.id);
+  // 15 graus = 0.261799 rad
+  expect(rotatedElement?.angle).toBeCloseTo((15 * Math.PI) / 180);
+});
+
+it("should rotate by 90 degrees when Grid is ON", async () => {
+  await render(<Excalidraw handleKeyboardGlobally={true} gridModeEnabled={true} />);
+  act(() => { h.app.setAppState({ gridModeEnabled: true }); }); // Grid ON
+
+  const element = API.createElement({ type: "rectangle", angle: 0 });
+  API.setElements([element]);
+  API.setSelectedElements([element]);
+
+  fireEvent.keyDown(document, {
+    key: "ArrowRight",
+    shiftKey: true,
+  });
+
+  const rotatedElement = h.elements.find((el) => el.id === element.id);
+  // Esperamos 90 graus (PI/2)
+  expect(rotatedElement?.angle).toBeCloseTo(Math.PI / 2);
+});
+
+it("should prioritize Precision Mode (Alt) over Grid Mode", async () => {
+  // Setup: Grid LIGADO
+  await render(<Excalidraw handleKeyboardGlobally={true} gridModeEnabled={true} />);
+  act(() => { h.app.setAppState({ gridModeEnabled: true }); });
+
+  const element = API.createElement({ type: "rectangle", angle: 0 });
+  API.setElements([element]);
+  API.setSelectedElements([element]);
+
+  // Ação: Shift + ALT + Seta (Com Grid ligado)
+  fireEvent.keyDown(document, {
+    key: "ArrowRight",
+    shiftKey: true,
+    altKey: true, // <--- A chave do teste
+  });
+
+  const rotatedElement = h.elements.find((el) => el.id === element.id);
+
+  // Se o Grid vencesse: 90 graus.
+  // Se o Alt vencer: 1 grau.
+  const oneDegreeRad = (1 * Math.PI) / 180;
+
+  expect(rotatedElement?.angle).toBeCloseTo(oneDegreeRad);
 });
